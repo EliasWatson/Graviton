@@ -60,20 +60,18 @@ displayWordImage:
 	;if yes, jump out of loop
 	je .completePix
 	;get the posmap byte
-	;mov upper half into bx and multiply by 320
-	mov [bx], [cx]
-	mov ax, [bx]
-	mov [bx], bh
-	mov ax, bx
+	mov bx, [cx]
+	;mov upper half into ax and multiply by 320
+	mov ax, bh
 	mov bp, 320
 	mul bp
-	mov [bx], ax
-	mov bp, bx
-	;add lower half of coordinate reg (x-value)
-	add bp, al
+	;add lower half of coordinate reg (x-value) and mov it into bp
+	add ax, bl
+	mov bx, ax
+	mov bp, [bx]
 	;get color byte
-	mov [bx], dx
-	add [bx], [allPurposeCounter]
+	mov bx, [dx]
+	add bx, [allPurposeCounter]
 	mov ax, [bx]
 	;display to screen
 	mov     [es:bp], ax
@@ -82,6 +80,7 @@ displayWordImage:
 	add [allPurposeCounter], 8
 	jmp .loopPix
 .completePix
+	ret
 
 section .data
 	allPurposeCounter: dq 0
