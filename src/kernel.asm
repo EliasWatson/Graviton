@@ -2,30 +2,92 @@ bits 16
 
 org 0
 
-;macro to check stack for threads params: 
+; Where to find the INT 8 handler vector within the IVT [interrupt vector table]
+IVT8_OFFSET_SLOT	equ	4 * 8			; Each IVT entry is 4 bytes; this is the 8th
+IVT8_SEGMENT_SLOT	equ	IVT8_OFFSET_SLOT + 2	; Segment after Offset
+
+;creates an image struc with max 16 pixels
+struc wordImage
+	;the coordinates (on the dosbox display) of the upper left corner of the image
+    .x_coord: dw 0
+    .y_coord: db 0
+    ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
+    .posMap: TIMES 2 dq 0
+	;each byte is the color of the pixel in the same byte of posMap
+	.colMap:	TIMES 2 dq 0
+    .size:
+endstruc
+
+;creates an image struc with max 32 pixels
+struc quadImage
+	;the coordinates (on the dosbox display) of the upper left corner of the image
+    .x_coord: dw 0
+    .y_coord: db 0
+    ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
+    .posMap: TIMES 4 dq 0
+	;each byte is the color of the pixel in the same byte of posMap
+	.colMap:	TIMES 4 dq 0
+    .size:
+endstruc
+
+;creates an image struc with max 64 pixels
+struc octImage
+	;the coordinates (on the dosbox display) of the upper left corner of the image
+    .x_coord: dw 0
+    .y_coord: db 0
+    ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
+    .posMap: TIMES 8 dq 0
+	;each byte is the color of the pixel in the same byte of posMap
+	.colMap:	TIMES 8 dq 0
+    .size:
+endstruc
 
 SECTION .text
 main:
-	;jmp main
+	mov     ah, 0x0
+	mov     al, 0x1
+	int     0x10                    ; set video to text mode
 
-    mov ax, 0x13
-    int 0x10
+	; Set ES=0x0000 (segment of IVT)
+	mov	ax, 0x0000
+	mov	es, ax
+	
+	; TODO Install interrupt hook
+	; 0. disable interrupts (so we can't be...INTERRUPTED...)
+	cli
+	; 1. save current INT 8 handler address (segment:offset) into ivt8_offset and ivt8_segment
+	mov ax, [es:IVT8_OFFSET_SLOT]
+    mov [ivt8_offset], ax
+    mov ax, [es:IVT8_SEGMENT_SLOT]
+    mov [ivt8_segment], ax
+	; 2. set new INT 8 handler address (OUR code's segment:offset)
+	lea ax, [timer_isr]
+    mov [es:IVT8_OFFSET_SLOT], ax
+    mov ax, cs
+    mov [es:IVT8_SEGMENT_SLOT], ax
+	; 3. reenable interrupts (GO!)
+	sti
 
-	mov ax, 0x800
-	mov ds, ax
+	mov     ah, 0x0
+	mov     al, 0x13
+	int     0x10                    ; set video to vga mode
 
 	mov     byte [task_status], 1               ; set main task to active
 
-	lea     di, [task_a]                        ; create task a
+	lea     di, [render_graphics]                        ; create graphics thread
 	call    spawn_new_task
 
-	lea     di, [task_b]                        ; create task b
+	lea     di, [control_player]                        ; create player thread
+	call    spawn_new_task
+
+	lea     di, [sustain_wells]                        ; create gravity wells thread
+	call    spawn_new_task
+
+	lea     di, [task_d]                        ; create task b
 	call    spawn_new_task
 
 .loop_forever_main:                             ; have main print for eternity
-	;lea     di, [task_main_str]
-	;call    putstring
-	call    yield                               ; we are done printing, let another task know they can print
+	;either have this be one of our threads or have it be an error handler
 	jmp     .loop_forever_main	
 	; does not terminate or return
 
@@ -93,13 +155,9 @@ yield:
 	popa
 	ret
 
-task_a:
+;graphics thread
+render_graphics:
 .loop_forever_1:
-	;mov     ax, 0xA000
-	;mov     es, ax
-	;mov     cx, 0x0C8F            ; color
-	;mov     [es:bx], cx
-
     mov ax, 0x0C8F
     mov bx, 0x0
 	mov cx, [rect_a_x]
@@ -112,7 +170,8 @@ task_a:
 	jmp     .loop_forever_1
 	; does not terminate or return
 
-task_b:
+;player thread
+control_player:
 .loop_forever_2:
     mov ax, 0x0C73
     mov bx, 0x0
@@ -125,6 +184,96 @@ task_b:
 	call    yield
 	jmp     .loop_forever_2
 	; does not terminate or return
+
+;gravity well thread
+sustain_wells:
+.loop_forever_3:
+    mov ax, 0x0C8F
+    mov bx, 0x0
+	mov cx, [rect_a_x]
+    mov dx, 0x0
+    int 0x10
+
+	inc word [rect_a_x]
+
+	call    yield
+	jmp     .loop_forever_3
+	; does not terminate or return
+
+task_d:
+.loop_forever_4:
+    mov ax, 0x0C8F
+    mov bx, 0x0
+	mov cx, [rect_a_x]
+    mov dx, 0x0
+    int 0x10
+
+	inc word [rect_a_x]
+
+	call    yield
+	jmp     .loop_forever_4
+	; does not terminate or return
+
+	;not entirely sure where to put this
+	mov ax, 0x800
+	mov ds, ax
+
+; INT 8 Timer ISR (interrupt service routine)
+; cannot clobber anything; must CHAIN to original caller (for interrupt acknowledgment)
+; DS/ES == ???? (at entry, and must retain their original values at exit)
+timer_isr:
+	;save any registers we clobber to the stack
+	pusha
+	mov     ax, 0xB800
+	mov     es, ax
+	; TODO: any random thing we decide to do in here
+
+	mov ax, 0x0000
+	mov es, ax
+	;restore any registers we clobbered from the stack
+	popa
+	; Chain (i.e., jump) to the original INT 8 handler 
+	jmp	far [cs:ivt8_offset]	; Use CS as the segment here, since who knows what DS is now
+
+;assumes vga mode is already set and es is set to A0000
+;accepts the memory address of an image struc in bx as a parameter
+global displayWordImage
+displayWordImage:
+	;save all registers
+	pusha
+	;set allPurposeCounter to 0
+	mov [allPurposeCounter], 0
+	;mov the address of the colMap and posMap into regs
+	lea dx, [bx + wordImage.colMap]
+	lea cx, [bx + wordImage.posMap]
+;loop through the posmap until the address equals the address of the colmap
+.loopPix:
+	;check if the current posMap address is equal to the starting address of colMap
+	cmp cx, dx
+	;if yes, jump out of loop
+	je .completePix
+	;get the posmap byte
+	mov bx, [cx]
+	;mov upper half into ax and multiply by 320
+	mov ax, bh
+	mov bp, 320
+	mul bp
+	;add lower half of coordinate reg (x-value) and mov it into bp
+	add ax, bl
+	mov bx, ax
+	mov bp, [bx]
+	;get color byte
+	mov bx, [dx]
+	add bx, [allPurposeCounter]
+	mov ax, [bx]
+	;display to screen
+	mov     [es:bp], ax
+	;increase memory address for cx and increment counter
+	add cx, 8
+	add [allPurposeCounter], 8
+	jmp .loopPix
+.completePix
+	ret
 
 ; takes a char to print in dx
 ; no return value
@@ -153,6 +302,13 @@ task_b:
 SECTION .data
 	rect_a_x: dw 0
 	rect_b_x: dw 0
+	rect_c_x: dw 0
+	rect_d_x: dw 0
+
+	ivt8_offset	dw	0
+	ivt8_segment	dw	0
+
+	allPurposeCounter: dq 0
 
 	current_task: dw 0 ; must always be a multiple of 2
 	stacks: times (256 * 4) db 0 ; 31 fake stacks of size 256 bytes
