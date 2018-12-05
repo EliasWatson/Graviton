@@ -6,6 +6,9 @@ org 0
 IVT8_OFFSET_SLOT	equ	4 * 8			; Each IVT entry is 4 bytes; this is the 8th
 IVT8_SEGMENT_SLOT	equ	IVT8_OFFSET_SLOT + 2	; Segment after Offset
 
+IVT9_OFFSET_SLOT	equ	4 * 9
+IVT9_SEGMENT_SLOT	equ	IVT9_OFFSET_SLOT + 2
+
 ;all images are 16x16 pixels
 
 ;creates an image struc with max 16 pixels
@@ -77,6 +80,16 @@ main:
     mov [es:IVT8_OFFSET_SLOT], ax
     mov ax, cs
     mov [es:IVT8_SEGMENT_SLOT], ax
+
+	mov ax, [es:IVT9_OFFSET_SLOT]
+    mov [ivt9_offset], ax
+    mov ax, [es:IVT9_SEGMENT_SLOT]
+    mov [ivt9_segment], ax
+
+	lea ax, [keyboard_int]
+    mov [es:IVT9_OFFSET_SLOT], ax
+    mov ax, cs
+    mov [es:IVT9_SEGMENT_SLOT], ax
 	; 3. reenable interrupts (GO!)
 	sti
 
@@ -153,8 +166,34 @@ render_environment:
 ;player thread
 control_player:
 .loop_forever_2:
+    mov ax, 0x0C73
+    mov bx, 0x0
+	mov cx, [rect_b_x]
+    mov dx, 100
+    int 0x10
+
+    cmp byte [keypress], 0x1E
+    jne .key_a_exit
+        inc word [rect_b_x]
+    .key_a_exit:
+    
+    cmp byte [keypress], 0x20
+    jne .key_d_exit
+        dec word [rect_b_x]
+    .key_d_exit:
+
 	jmp     .loop_forever_2
 	; does not terminate or return
+
+; Custom keyboard interrupt
+keyboard_int:
+    push ax
+    in al, 0x60
+    mov [keypress], al
+    mov ax, 0x20
+    out 0x20, al
+    pop ax
+    iret
 
 ;gravity well thread
 sustain_wells:
@@ -307,8 +346,13 @@ SECTION .data
 	rect_c_x: dw 0
 	rect_d_x: dw 0
 
-	ivt8_offset	dw	0
-	ivt8_segment	dw	0
+    keypress: db 0
+
+	ivt8_offset	 dw	0
+	ivt8_segment dw	0
+
+	ivt9_offset	 dw	0
+	ivt9_segment dw	0
 
 	allPurposeCounter: dq 0
 
