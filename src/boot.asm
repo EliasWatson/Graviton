@@ -42,7 +42,7 @@ main:
     mov ax, ss
     mov es, ax
     mov ax, 0x203
-    mov cx, 0x2
+    mov cx, 0x3
     xor dx, dx
     mov dl, [boot_disk]
     xor bx, bx
