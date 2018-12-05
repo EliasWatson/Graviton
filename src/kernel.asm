@@ -9,36 +9,36 @@ IVT8_SEGMENT_SLOT	equ	IVT8_OFFSET_SLOT + 2	; Segment after Offset
 ;creates an image struc with max 16 pixels
 struc wordImage
 	;the coordinates (on the dosbox display) of the upper left corner of the image
-    .x_coord: dw 0
-    .y_coord: db 0
+    .x_coord: resw 0
+    .y_coord: resb 0
     ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
-    .posMap: TIMES 2 dq 0
+    .posMap: TIMES 2 resq 0
 	;each byte is the color of the pixel in the same byte of posMap
-	.colMap:	TIMES 2 dq 0
+	.colMap:	TIMES 2 resq 0
     .size:
 endstruc
 
 ;creates an image struc with max 32 pixels
 struc quadImage
 	;the coordinates (on the dosbox display) of the upper left corner of the image
-    .x_coord: dw 0
-    .y_coord: db 0
+    .x_coord: resw 0
+    .y_coord: resb 0
     ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
-    .posMap: TIMES 4 dq 0
+    .posMap: TIMES 4 resq 0
 	;each byte is the color of the pixel in the same byte of posMap
-	.colMap:	TIMES 4 dq 0
+	.colMap:	TIMES 4 resq 0
     .size:
 endstruc
 
 ;creates an image struc with max 64 pixels
 struc octImage
 	;the coordinates (on the dosbox display) of the upper left corner of the image
-    .x_coord: dw 0
-    .y_coord: db 0
+    .x_coord: resw 0
+    .y_coord: resb 0
     ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
-    .posMap: TIMES 8 dq 0
+    .posMap: TIMES 8 resq 0
 	;each byte is the color of the pixel in the same byte of posMap
-	.colMap:	TIMES 8 dq 0
+	.colMap:	TIMES 8 resq 0
     .size:
 endstruc
 
@@ -129,32 +129,6 @@ spawn_new_task:
 	mov     sp, [bx]
 	ret
 
-yield:
-	pusha                                       ; push registers
-	pushf                                       ; push flags
-	lea     bx, [stack_pointers]                ; save current stack pointer
-	add     bx, [current_task]
-	mov     [bx], sp
-	mov     cx, [current_task]                  ; look for a new task 
-	add     cx, 2                               ; start searching at the next one though
-.y_check_if_enabled:
-	lea     bx, [task_status]
-	add     bx, cx
-	cmp     word [bx], 1
-	je      .y_task_available
-	add     cx, 2                               ; next stack to search
-    and     cx, 0x2F                            ; make sure stack to search is always less than 64
-	jmp     .y_check_if_enabled
-.y_task_available:
-	mov     bx, cx
-	mov     [current_task], bx
-	mov     bx, stack_pointers                  ; update stack pointer
-	add     bx, [current_task]
-	mov     sp, [bx]
-	popf
-	popa
-	ret
-
 ;graphics thread
 render_graphics:
 .loop_forever_1:
@@ -166,7 +140,7 @@ render_graphics:
 
 	inc word [rect_a_x]
 
-	call    yield
+	;call    yield
 	jmp     .loop_forever_1
 	; does not terminate or return
 
@@ -181,7 +155,7 @@ control_player:
 
 	inc word [rect_b_x]
 
-	call    yield
+	;call    yield
 	jmp     .loop_forever_2
 	; does not terminate or return
 
@@ -196,7 +170,7 @@ sustain_wells:
 
 	inc word [rect_a_x]
 
-	call    yield
+	;call    yield
 	jmp     .loop_forever_3
 	; does not terminate or return
 
@@ -210,7 +184,7 @@ task_d:
 
 	inc word [rect_a_x]
 
-	call    yield
+	;call    yield
 	jmp     .loop_forever_4
 	; does not terminate or return
 
@@ -224,14 +198,30 @@ task_d:
 timer_isr:
 	;save any registers we clobber to the stack
 	pusha
-	mov     ax, 0xB800
-	mov     es, ax
-	; TODO: any random thing we decide to do in here
-
-	mov ax, 0x0000
-	mov es, ax
-	;restore any registers we clobbered from the stack
-	popa
+    lea     bx, [stack_pointers]                ; get the location of the stack pointers
+    add     bx, [current_task]                  ; get the location of the current stack pointer
+    mov     [bx], sp                            ; save current stack so we can switch back
+    mov     cx, [current_task]                  ; look for a new task 
+    add     cx, 2
+.sp_loop_for_active_stack:
+    cmp     cx, [current_task]                  ; we are done when we get back to the original
+    jne     .sp_check_if_active
+    jmp     .sp_none_active
+.sp_check_if_active:
+    lea     bx, [task_status]                   ; get status of this stack
+    add     bx, cx                              
+    cmp     word [bx], 1
+    je      .sp_is_active
+    add     cx, 2                               ; next stack to search
+    and     cx, 0x2F                            ; make sure stack to search is always less than 64
+    jmp     .sp_loop_for_active_stack
+.sp_is_active:
+    mov     [current_task], cx
+    lea     bx, [stack_pointers]                ; get the location of the stack pointers
+    add     bx, [current_task]                  ; get the location of the current stack pointer
+    mov     sp, [bx]
+.sp_none_active:
+    popa
 	; Chain (i.e., jump) to the original INT 8 handler 
 	jmp	far [cs:ivt8_offset]	; Use CS as the segment here, since who knows what DS is now
 
@@ -242,7 +232,7 @@ displayWordImage:
 	;save all registers
 	pusha
 	;set allPurposeCounter to 0
-	mov [allPurposeCounter], 0
+	mov dword [allPurposeCounter], 0
 	;mov the address of the colMap and posMap into regs
 	lea dx, [bx + wordImage.colMap]
 	lea cx, [bx + wordImage.posMap]
@@ -253,26 +243,28 @@ displayWordImage:
 	;if yes, jump out of loop
 	je .completePix
 	;get the posmap byte
-	mov bx, [cx]
+	mov bx, cx
+	mov bx, [bx]
 	;mov upper half into ax and multiply by 320
-	mov ax, bh
+	movzx ax, bh
 	mov bp, 320
 	mul bp
 	;add lower half of coordinate reg (x-value) and mov it into bp
-	add ax, bl
-	mov bx, ax
+	movzx bx, bl
+	add bx, ax
 	mov bp, [bx]
 	;get color byte
-	mov bx, [dx]
+	mov bx, dx
+	mov bx, [bx]
 	add bx, [allPurposeCounter]
 	mov ax, [bx]
 	;display to screen
 	mov     [es:bp], ax
 	;increase memory address for cx and increment counter
 	add cx, 8
-	add [allPurposeCounter], 8
+	add dword [allPurposeCounter], 8
 	jmp .loopPix
-.completePix
+.completePix:
 	ret
 
 ; takes a char to print in dx
