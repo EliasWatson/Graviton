@@ -42,6 +42,18 @@ struc octImage
     .size:
 endstruc
 
+;creates a gravity well struc
+struc grav_well
+	;the coordinates (on the dosbox display) of the upper left corner of the well
+    .x_coord: resw 0
+    .y_coord: resb 0
+	;denotes the current energy level of the well (can only go to 10 before resetting)
+	.power_level: resb 0
+	;denotes the level of the energy the well is holding (0 if none)
+	.cur_power: resb 0
+    .size:
+endstruc
+
 SECTION .text
 main:
 	mov     ah, 0x0
@@ -74,7 +86,7 @@ main:
 
 	mov     byte [task_status], 1               ; set main task to active
 
-	lea     di, [render_graphics]                        ; create graphics thread
+	lea     di, [render_environment]                        ; create graphics thread
 	call    spawn_new_task
 
 	lea     di, [control_player]                        ; create player thread
@@ -83,7 +95,7 @@ main:
 	lea     di, [sustain_wells]                        ; create gravity wells thread
 	call    spawn_new_task
 
-	lea     di, [task_d]                        ; create task b
+	lea     di, [render_wells]                        ; create task b
 	call    spawn_new_task
 
 .loop_forever_main:                             ; have main print for eternity
@@ -129,8 +141,8 @@ spawn_new_task:
 	mov     sp, [bx]
 	ret
 
-;graphics thread
-render_graphics:
+;environment graphics thread
+render_environment:
 .loop_forever_1:
     mov ax, 0x0C8F
     mov bx, 0x0
@@ -155,12 +167,49 @@ control_player:
 
 	inc word [rect_b_x]
 
-	;call    yield
 	jmp     .loop_forever_2
 	; does not terminate or return
 
 ;gravity well thread
 sustain_wells:
+;create six empty well strucs at six positions
+grav_one: ISTRUC grav_well
+    AT grav_well.x_coord, dw 0x64
+    AT grav_well.y_coord, db 0x32
+    AT grav_well.power_level, db 0
+    AT grav_well.cur_power, db 0
+IEND
+grav_two: ISTRUC grav_well
+    AT grav_well.x_coord, dw 0xC8
+    AT grav_well.y_coord, db 0x32
+    AT grav_well.power_level, db 0
+    AT grav_well.cur_power, db 0
+IEND
+grav_three: ISTRUC grav_well
+    AT grav_well.x_coord, dw 0x96
+    AT grav_well.y_coord, db 0x64
+    AT grav_well.power_level, db 0
+    AT grav_well.cur_power, db 0
+IEND
+grav_four: ISTRUC grav_well
+    AT grav_well.x_coord, dw 0xFA
+    AT grav_well.y_coord, db 0x64
+    AT grav_well.power_level, db 0
+    AT grav_well.cur_power, db 0
+IEND
+grav_five: ISTRUC grav_well
+    AT grav_well.x_coord, dw 0x64
+    AT grav_well.y_coord, db 0x96
+    AT grav_well.power_level, db 0
+    AT grav_well.cur_power, db 0
+IEND
+grav_six: ISTRUC grav_well
+    AT grav_well.x_coord, dw 0xC8
+    AT grav_well.y_coord, db 0x96
+    AT grav_well.power_level, db 0
+    AT grav_well.cur_power, db 0
+IEND
+
 .loop_forever_3:
     mov ax, 0x0C8F
     mov bx, 0x0
@@ -174,7 +223,8 @@ sustain_wells:
 	jmp     .loop_forever_3
 	; does not terminate or return
 
-task_d:
+;well graphics thread
+render_wells:
 .loop_forever_4:
     mov ax, 0x0C8F
     mov bx, 0x0
