@@ -39,10 +39,10 @@ main:
 
 	; TODO: use BIOS raw disk I/O to load sector 2 from disk number <boot_disk> into memory at 0800:0000h (retry on failure)
     .load_disk:
-    mov ax, ss
+    mov ah, 0x2
+	mov al, 0x3
     mov es, ax
-    mov ax, 0x203
-    mov cx, 0x3
+    mov cx, 0x2
     xor dx, dx
     mov dl, [boot_disk]
     xor bx, bx
