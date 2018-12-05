@@ -9,17 +9,19 @@ IVT8_SEGMENT_SLOT	equ	IVT8_OFFSET_SLOT + 2	; Segment after Offset
 IVT9_OFFSET_SLOT	equ	4 * 9
 IVT9_SEGMENT_SLOT	equ	IVT9_OFFSET_SLOT + 2
 
+;all images are 16x16 pixels
+
 ;creates an image struc with max 16 pixels
-struc wordImage
+;struc wordImage
 	;the coordinates (on the dosbox display) of the upper left corner of the image
-    .x_coord: resw 0
-    .y_coord: resb 0
+;    .x_coord: resw 0
+;    .y_coord: resb 0
     ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
-    .posMap: TIMES 2 resq 0
+;    .posMap: TIMES 2 resq 0
 	;each byte is the color of the pixel in the same byte of posMap
-	.colMap:	TIMES 2 resq 0
-    .size:
-endstruc
+;	.colMap:	TIMES 2 resq 0
+;    .size:
+;endstruc
 
 ;creates an image struc with max 32 pixels
 struc quadImage
@@ -34,16 +36,16 @@ struc quadImage
 endstruc
 
 ;creates an image struc with max 64 pixels
-struc octImage
+;struc octImage
 	;the coordinates (on the dosbox display) of the upper left corner of the image
-    .x_coord: resw 0
-    .y_coord: resb 0
+;    .x_coord: resw 0
+;    .y_coord: resb 0
     ;the position of each pixel in the image relative to the top left corner. For each byte: lower half: x, higher half: y
-    .posMap: TIMES 8 resq 0
+;    .posMap: TIMES 8 resq 0
 	;each byte is the color of the pixel in the same byte of posMap
-	.colMap:	TIMES 8 resq 0
-    .size:
-endstruc
+;	.colMap:	TIMES 8 resq 0
+;    .size:
+;endstruc
 
 ;creates a gravity well struc
 struc grav_well
@@ -52,8 +54,6 @@ struc grav_well
     .y_coord: resb 0
 	;denotes the current energy level of the well (can only go to 10 before resetting)
 	.power_level: resb 0
-	;denotes the level of the energy the well is holding (0 if none)
-	.cur_power: resb 0
     .size:
 endstruc
 
@@ -111,6 +111,9 @@ main:
 	lea     di, [render_wells]                        ; create task b
 	call    spawn_new_task
 
+	mov     ax, 0xA000
+	mov     es, ax                  ; set memory to vga position
+
 .loop_forever_main:                             ; have main print for eternity
 	;either have this be one of our threads or have it be an error handler
 	jmp     .loop_forever_main	
@@ -157,15 +160,6 @@ spawn_new_task:
 ;environment graphics thread
 render_environment:
 .loop_forever_1:
-    mov ax, 0x0C8F
-    mov bx, 0x0
-	mov cx, [rect_a_x]
-    mov dx, 0x0
-    int 0x10
-
-	inc word [rect_a_x]
-
-	;call    yield
 	jmp     .loop_forever_1
 	; does not terminate or return
 
@@ -203,69 +197,22 @@ keyboard_int:
 
 ;gravity well thread
 sustain_wells:
-;create six empty well strucs at six positions
-grav_one: ISTRUC grav_well
-    AT grav_well.x_coord, dw 0x64
-    AT grav_well.y_coord, db 0x32
-    AT grav_well.power_level, db 0
-    AT grav_well.cur_power, db 0
-IEND
-grav_two: ISTRUC grav_well
-    AT grav_well.x_coord, dw 0xC8
-    AT grav_well.y_coord, db 0x32
-    AT grav_well.power_level, db 0
-    AT grav_well.cur_power, db 0
-IEND
-grav_three: ISTRUC grav_well
-    AT grav_well.x_coord, dw 0x96
-    AT grav_well.y_coord, db 0x64
-    AT grav_well.power_level, db 0
-    AT grav_well.cur_power, db 0
-IEND
-grav_four: ISTRUC grav_well
-    AT grav_well.x_coord, dw 0xFA
-    AT grav_well.y_coord, db 0x64
-    AT grav_well.power_level, db 0
-    AT grav_well.cur_power, db 0
-IEND
-grav_five: ISTRUC grav_well
-    AT grav_well.x_coord, dw 0x64
-    AT grav_well.y_coord, db 0x96
-    AT grav_well.power_level, db 0
-    AT grav_well.cur_power, db 0
-IEND
-grav_six: ISTRUC grav_well
-    AT grav_well.x_coord, dw 0xC8
-    AT grav_well.y_coord, db 0x96
-    AT grav_well.power_level, db 0
-    AT grav_well.cur_power, db 0
-IEND
-
 .loop_forever_3:
-    mov ax, 0x0C8F
-    mov bx, 0x0
-	mov cx, [rect_a_x]
-    mov dx, 0x0
-    int 0x10
-
-	inc word [rect_a_x]
-
-	;call    yield
 	jmp     .loop_forever_3
 	; does not terminate or return
 
 ;well graphics thread
 render_wells:
 .loop_forever_4:
-    mov ax, 0x0C8F
-    mov bx, 0x0
-	mov cx, [rect_a_x]
-    mov dx, 0x0
-    int 0x10
-
-	inc word [rect_a_x]
-
-	;call    yield
+	mov bx, [grav_one]
+	mov ax, word [bx]
+	mov cx, [bx + 2]
+	mov bx, [grav_sprite]
+	mov [bx], ax
+	mov [bx + 2], cx
+	call mutex
+	call displayQuadImage
+	call release
 	jmp     .loop_forever_4
 	; does not terminate or return
 
@@ -308,15 +255,15 @@ timer_isr:
 
 ;assumes vga mode is already set and es is set to A0000
 ;accepts the memory address of an image struc in bx as a parameter
-global displayWordImage
-displayWordImage:
+global displayQuadImage
+displayQuadImage:
 	;save all registers
 	pusha
 	;set allPurposeCounter to 0
 	mov dword [allPurposeCounter], 0
 	;mov the address of the colMap and posMap into regs
-	lea dx, [bx + wordImage.colMap]
-	lea cx, [bx + wordImage.posMap]
+	lea dx, [bx + quadImage.colMap]
+	lea cx, [bx + quadImage.posMap]
 ;loop through the posmap until the address equals the address of the colmap
 .loopPix:
 	;check if the current posMap address is equal to the starting address of colMap
@@ -372,6 +319,27 @@ displayWordImage:
 ; .done:
 ; 	ret
 
+mutex:
+    push    ax
+    mov     ax, 0
+    jmp     .try
+.loop:
+    int     0x8
+.try:
+    xchg    [mutex_v], ax                        ; when ax is 1, we got the lock so move one
+    cmp     ax, 0
+    je      .loop                                ; loop while ax is 0, we didn't get the lock
+    pop     ax
+    ret
+
+release:
+    push    ax
+    mov     ax, 1
+    xchg    [mutex_v], ax                        ; set mutex_v back to 1 so someone else can grab the lock
+    pop     ax
+    int     0x8
+    ret
+
 SECTION .data
 	rect_a_x: dw 0
 	rect_b_x: dw 0
@@ -387,6 +355,44 @@ SECTION .data
 	ivt9_segment dw	0
 
 	allPurposeCounter: dq 0
+
+	;create six empty well strucs at six positions
+	grav_one:
+        dw 0x64
+        db 0x32
+        db 0
+    grav_two:
+        dw 0xC8
+        db 0x32
+        db 0
+    grav_three:
+        dw 0x96
+        db 0x64
+        db 0
+    grav_four:
+        dw 0xFA
+        db 0x64
+        db 0
+    grav_five:
+        dw 0x64
+        db 0x96
+        db 0
+    grav_six:
+        dw 0xC8
+        db 0x96
+        db 0
+
+	;gravity well sprites
+	grav_sprite:
+		dw 0
+		db 0
+		TIMES 4 dq 0x9537CA
+		TIMES 4 dq 0x0B0B0B
+
+	;energy sprites
+	;quadImage
+
+	mutex_v: dw 1
 
 	current_task: dw 0 ; must always be a multiple of 2
 	stacks: times (256 * 4) db 0 ; 31 fake stacks of size 256 bytes
