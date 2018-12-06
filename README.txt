@@ -2,7 +2,7 @@ No known bugs
 
 Hours spent:
 Elias  - 10h
-Brandt  - 6h, 10m
+Brandt  - 9h
 Taylor - 0h
 
 //Brandt, 11-28-18 10:13AM update: adding 3 hours to my total for creating imageconstructor.asm. Still needs to be integrated into kernel and likely has a few bugs. Running tests.
