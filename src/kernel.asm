@@ -14,10 +14,6 @@ main:
 	mov		ax, cs
 	mov 	ds, ax
 
-	mov     ah, 0x0
-	mov     al, 0x1
-	int     0x10                    ; set video to text mode
-
 	mov	ax, 0x0000
 	mov	es, ax
 	
@@ -48,7 +44,7 @@ main:
 
 	mov     word [task_status], 1               ; set main task to active
 
-	lea     di, [render_environment]                        ; create graphics thread
+	lea     di, [render_player]                        ; create graphics thread
 	call    spawn_new_task
 
 	lea     di, [control_player]                        ; create player thread
@@ -109,78 +105,104 @@ spawn_new_task:
 	ret
 
 ;environment graphics thread
-render_environment:
+render_player:
 .loop_forever_1:
+    mov ax, 0x0C3F
+    mov bx, 0x0
+	mov cx, [player_x]
+    mov dx, [player_y]
+
+    %rep 3
+    int 0x10
+    inc cx
+    %endrep
+
+	mov cx, [player_x]
+    inc dx
+    %rep 3
+    int 0x10
+    inc cx
+    %endrep
+
+	mov cx, [player_x]
+    inc dx
+    %rep 3
+    int 0x10
+    inc cx
+    %endrep
+    
 	jmp     .loop_forever_1
 
 ;player thread
 control_player:
 .loop_forever_2:
-    cmp     byte [keypress], 0        ; have we got a keypress yet?
-	je      .loop_forever_2            ; no so we wait in a loop
-
-    ; 0x11 - W Down
-    ; 0x91 - W Up
+    cmp byte [keypress], 0
+	je .loop_forever_2
 
     ; 0x1E - A Down
     ; 0x9E - A Up
-
-    ; 0x1F - S Down
-    ; 0x9F - S Up
-
-    ; 0x20 - D Down
-    ; 0xA0 - D Up
-
-    ; Keyboard input
     cmp byte [keypress], 0x1E
     jne .key_a_exit
         dec word [player_x]
     .key_a_exit:
     
+    ; 0x20 - D Down
+    ; 0xA0 - D Up
     cmp byte [keypress], 0x20
     jne .key_d_exit
         inc word [player_x]
     .key_d_exit:
     
+    ; 0x11 - W Down
+    ; 0x91 - W Up
     cmp byte [keypress], 0x11
     jne .key_w_exit
         inc byte [player_y]
     .key_w_exit:
 
+    ; 0x1F - S Down
+    ; 0x9F - S Up
     cmp byte [keypress], 0x1F
     jne .key_s_exit
         dec byte [player_y]
     .key_s_exit:
 
-    ; Well collision
-    ;inc word [player_x]
-
-    ; Draw player
-    mov ax, 0x0C73
-    mov bx, 0x0
-	mov cx, [player_x]
-    mov dx, 100
-    int 0x10
-    
 	jmp     .loop_forever_2
 
-;gravity well thread
 sustain_wells:
 .loop_forever_3:
-	jmp     .loop_forever_3
+    mov ax, 0x0C2F
+    mov bx, 0x0
+    mov cx, [rect_a_x]
+    mov dx, 0x0
+    int 0x10
+
+    inc word [rect_a_x]
+    and word [rect_a_x], 0x3F
+    jmp     .loop_forever_3
 
 ;well graphics thread
 render_wells:
 .loop_forever_4:
+    mov ax, 0x0C73
+    mov bx, 0x0
+    mov cx, [rect_b_x]
+    mov dx, 0x2
+    int 0x10
+
+    inc word [rect_b_x]
+    and word [rect_b_x], 0x3F
     jmp .loop_forever_4
 
 ; Custom keyboard interrupt
 keyboard_int:
     push ax
+
     in al, 0x60
     mov [keypress], al
     mov al, 0x20
     out 0x20, al
+
     pop ax
     iret
 
