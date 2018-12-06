@@ -217,13 +217,14 @@ sustain_wells:
 
 ;well graphics thread
 render_wells:
-.loop_forever_4:
 	mov bx, [grav_one]
 	mov ax, word [bx]
 	mov cx, [bx + 2]
 	mov bx, [grav_sprite]
 	mov [bx], ax
 	mov [bx + 2], cx
+.loop_forever_4:
+	mov bx, [grav_sprite]
 	call mutex
 	call displayQuadImage
 	call release
