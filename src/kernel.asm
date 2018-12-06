@@ -1,6 +1,6 @@
 bits 16
 
-org 0
+org 0x0
 
 ; Where to find the INT 8 handler vector within the IVT [interrupt vector table]
 IVT8_OFFSET_SLOT	equ	4 * 8			; Each IVT entry is 4 bytes; this is the 8th
@@ -9,29 +9,23 @@ IVT8_SEGMENT_SLOT	equ	IVT8_OFFSET_SLOT + 2	; Segment after Offset
 IVT9_OFFSET_SLOT	equ	4 * 9
 IVT9_SEGMENT_SLOT	equ	IVT9_OFFSET_SLOT + 2
 
-
 SECTION .text
 main:
-    mov ax, cs
-    mov ds, ax
+	mov		ax, cs
+	mov 	ds, ax
 
 	mov     ah, 0x0
 	mov     al, 0x1
 	int     0x10                    ; set video to text mode
 
-	; Set ES=0x0000 (segment of IVT)
 	mov	ax, 0x0000
 	mov	es, ax
 	
-	; TODO Install interrupt hook
-	; 0. disable interrupts (so we can't be...INTERRUPTED...)
 	cli
-	; 1. save current INT 8 handler address (segment:offset) into ivt8_offset and ivt8_segment
 	mov ax, [es:IVT8_OFFSET_SLOT]
     mov [ivt8_offset], ax
     mov ax, [es:IVT8_SEGMENT_SLOT]
     mov [ivt8_segment], ax
-	; 2. set new INT 8 handler address (OUR code's segment:offset)
 	lea ax, [timer_isr]
     mov [es:IVT8_OFFSET_SLOT], ax
     mov ax, cs
@@ -46,14 +40,13 @@ main:
     mov [es:IVT9_OFFSET_SLOT], ax
     mov ax, cs
     mov [es:IVT9_SEGMENT_SLOT], ax
-	; 3. reenable interrupts (GO!)
 	sti
 
 	mov     ah, 0x0
 	mov     al, 0x13
 	int     0x10                    ; set video to vga mode
 
-	mov     byte [task_status], 1               ; set main task to active
+	mov     word [task_status], 1               ; set main task to active
 
 	lea     di, [render_environment]                        ; create graphics thread
 	call    spawn_new_task
@@ -73,7 +66,6 @@ main:
 .loop_forever_main:                             ; have main print for eternity
 	;either have this be one of our threads or have it be an error handler
 	jmp     .loop_forever_main	
-	; does not terminate or return
 
 ; di should contain the address of the function to run for a task
 spawn_new_task:
@@ -92,8 +84,10 @@ spawn_new_task:
 	cmp     word [bx], 0
 	je      .sp_is_available
 	add     cx, 2                               ; next stack to search
-    and     cx, 0x2F                            ; make sure stack to search is always less than 64
-	jmp     .sp_loop_for_available_stack
+    cmp     cx, 10
+	jl      .sp_loop_for_available_stack
+	mov		cx, 0
+    jmp     .sp_loop_for_available_stack
 .sp_is_available:
 	lea     bx, [task_status]                   ; we found a stack, set it to active
 	add     bx, cx
@@ -101,13 +95,10 @@ spawn_new_task:
 	lea     bx, [stack_pointers]                ; switch to the fake stack so we can do stuff with it
 	add     bx, cx
 	mov     sp, [bx]                            ; swap stacks
-    pushf
-    push cs
-    push di
+	pushf                                       ; emulate an interrupt, which pushes flags
+    push    cs                                  ; then a segment
+    push    di                                  ; then an address (just so happens to be the address of the function we want to run)
     pusha
-	;push    di                                  ; push address of function to run
-	;pusha                                       ; push registers
-	;pushf                                       ; push flags
 	lea     bx, [stack_pointers]                ; update top of this stack
 	add     bx, cx
 	mov     [bx], sp
@@ -121,66 +112,77 @@ spawn_new_task:
 render_environment:
 .loop_forever_1:
 	jmp     .loop_forever_1
-	; does not terminate or return
 
 ;player thread
 control_player:
 .loop_forever_2:
+    cmp     byte [keypress], 0        ; have we got a keypress yet?
+	je      .loop_forever_2            ; no so we wait in a loop
+
+    ; 0x11 - W Down
+    ; 0x91 - W Up
+
+    ; 0x1E - A Down
+    ; 0x9E - A Up
+
+    ; 0x1F - S Down
+    ; 0x9F - S Up
+
+    ; 0x20 - D Down
+    ; 0xA0 - D Up
+
     ; Keyboard input
     cmp byte [keypress], 0x1E
     jne .key_a_exit
-        inc word [player_x]
+        dec word [player_x]
     .key_a_exit:
     
     cmp byte [keypress], 0x20
     jne .key_d_exit
-        dec word [player_x]
+        inc word [player_x]
     .key_d_exit:
     
-    cmp byte [keypress], 0x1F
+    cmp byte [keypress], 0x11
     jne .key_w_exit
         inc byte [player_y]
     .key_w_exit:
 
-    cmp byte [keypress], 0x11
+    cmp byte [keypress], 0x1F
     jne .key_s_exit
         dec byte [player_y]
     .key_s_exit:
 
     ; Well collision
+    ;inc word [player_x]
 
     ; Draw player
     mov ax, 0x0C73
     mov bx, 0x0
-	mov cx, [rect_b_x]
+	mov cx, [player_x]
     mov dx, 100
     int 0x10
     
 	jmp     .loop_forever_2
-	; does not terminate or return
+
+;gravity well thread
+sustain_wells:
+.loop_forever_3:
+	jmp     .loop_forever_3
+
+;well graphics thread
+render_wells:
+.loop_forever_4:
+    jmp .loop_forever_4
 
 ; Custom keyboard interrupt
 keyboard_int:
     push ax
     in al, 0x60
     mov [keypress], al
-    mov ax, 0x20
+    mov al, 0x20
     out 0x20, al
     pop ax
     iret
-
-;gravity well thread
-sustain_wells:
-.loop_forever_3:
-	jmp     .loop_forever_3
-	; does not terminate or return
-
-;well graphics thread
-render_wells:
-.loop_forever_4:
-	;not entirely sure where to put this
-	mov ax, 0x800
-	mov ds, ax
 
 ; INT 8 Timer ISR (interrupt service routine)
 ; cannot clobber anything; must CHAIN to original caller (for interrupt acknowledgment)
@@ -203,7 +205,9 @@ timer_isr:
     cmp     word [bx], 1
     je      .sp_is_active
     add     cx, 2                               ; next stack to search
-    and     cx, 0x2F                            ; make sure stack to search is always less than 64
+    cmp     cx, 10
+	jl      .sp_loop_for_active_stack
+	mov		cx, 0
     jmp     .sp_loop_for_active_stack
 .sp_is_active:
     mov     [current_task], cx
@@ -215,10 +219,9 @@ timer_isr:
 	; Chain (i.e., jump) to the original INT 8 handler 
 	jmp	far [cs:ivt8_offset]	; Use CS as the segment here, since who knows what DS is now
 
-
 SECTION .data
-	rect_a_x: dw 200
-	rect_b_x: dw 100
+	rect_a_x: dw 0
+	rect_b_x: dw 0
 	rect_c_x: dw 0
 	rect_d_x: dw 0
 
