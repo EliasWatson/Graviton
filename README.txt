@@ -1,7 +1,7 @@
 No known bugs
 
 Hours spent:
-Elias  - 2h, 20m
+Elias  - 10h
 Brandt  - 6h, 10m
 Taylor - 0h
 
