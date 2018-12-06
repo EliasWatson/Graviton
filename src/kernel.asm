@@ -3,20 +3,24 @@ bits 16
 org 0x0
 
 ; Where to find the INT 8 handler vector within the IVT [interrupt vector table]
-IVT8_OFFSET_SLOT	equ	4 * 8			; Each IVT entry is 4 bytes; this is the 8th
+IVT8_OFFSET_SLOT	equ	4 * 8			        ; Each IVT entry is 4 bytes; this is the 8th
 IVT8_SEGMENT_SLOT	equ	IVT8_OFFSET_SLOT + 2	; Segment after Offset
 
+; Where to find the INT 9 handler vector within the IVT [interrupt vector table]
 IVT9_OFFSET_SLOT	equ	4 * 9
 IVT9_SEGMENT_SLOT	equ	IVT9_OFFSET_SLOT + 2
 
 SECTION .text
 main:
+    ; ds = cs
 	mov		ax, cs
 	mov 	ds, ax
 
+    ; Reset es
 	mov	ax, 0x0000
 	mov	es, ax
 	
+    ; Replace interrupts
 	cli
 	mov ax, [es:IVT8_OFFSET_SLOT]
     mov [ivt8_offset], ax
@@ -38,29 +42,30 @@ main:
     mov [es:IVT9_SEGMENT_SLOT], ax
 	sti
 
+    ; Set VGA mode
 	mov     ah, 0x0
 	mov     al, 0x13
-	int     0x10                    ; set video to vga mode
+	int     0x10
 
-	mov     word [task_status], 1               ; set main task to active
+	mov     word [task_status], 1   ; set main task to active
 
-	lea     di, [render_player]                        ; create graphics thread
+	lea     di, [render_player]     ; create graphics thread
 	call    spawn_new_task
 
-	lea     di, [control_player]                        ; create player thread
+	lea     di, [control_player]    ; create player thread
 	call    spawn_new_task
 
-	lea     di, [sustain_wells]                        ; create gravity wells thread
+	lea     di, [rect_1]     ; create gravity wells thread
 	call    spawn_new_task
 
-	lea     di, [render_wells]                        ; create task b
+	lea     di, [rect_2]      ; create task b
 	call    spawn_new_task
 
 	mov     ax, 0xA000
 	mov     es, ax                  ; set memory to vga position
 
-.loop_forever_main:                             ; have main print for eternity
-	;either have this be one of our threads or have it be an error handler
+.loop_forever_main:
+    ; Main does nothing
 	jmp     .loop_forever_main	
 
 ; di should contain the address of the function to run for a task
@@ -107,11 +112,13 @@ spawn_new_task:
 ;environment graphics thread
 render_player:
 .loop_forever_1:
+    ; Setup interrupt arguments
     mov ax, 0x0C3F
     mov bx, 0x0
 	mov cx, [player_x]
     mov dx, [player_y]
 
+    ; Draw 3x3 at player position
     %rep 3
     int 0x10
     inc cx
@@ -136,6 +143,7 @@ render_player:
 ;player thread
 control_player:
 .loop_forever_2:
+    ; Check for keystroke
     cmp byte [keypress], 0
 	je .loop_forever_2
 
@@ -169,8 +177,9 @@ control_player:
 
 	jmp     .loop_forever_2
 
-sustain_wells:
+rect_1:
 .loop_forever_3:
+    ; Draw rectangle #1
     mov ax, 0x0C2F
     mov bx, 0x0
     mov cx, [rect_a_x]
@@ -181,9 +190,9 @@ sustain_wells:
     and word [rect_a_x], 0x3F
     jmp     .loop_forever_3
 
-;well graphics thread
-render_wells:
+rect_2:
 .loop_forever_4:
+    ; Draw rectangle #2
     mov ax, 0x0C73
     mov bx, 0x0
     mov cx, [rect_b_x]
