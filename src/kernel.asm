@@ -166,22 +166,36 @@ render_environment:
 ;player thread
 control_player:
 .loop_forever_2:
+    ; Keyboard input
+    cmp byte [keypress], 0x1E
+    jne .key_a_exit
+        inc word [player_x]
+    .key_a_exit:
+    
+    cmp byte [keypress], 0x20
+    jne .key_d_exit
+        dec word [player_x]
+    .key_d_exit:
+    
+    cmp byte [keypress], 0x1F
+    jne .key_w_exit
+        inc byte [player_y]
+    .key_w_exit:
+
+    cmp byte [keypress], 0x11
+    jne .key_s_exit
+        dec byte [player_y]
+    .key_s_exit:
+
+    ; Well collision
+
+    ; Draw player
     mov ax, 0x0C73
     mov bx, 0x0
 	mov cx, [rect_b_x]
     mov dx, 100
     int 0x10
-
-    cmp byte [keypress], 0x1E
-    jne .key_a_exit
-        inc word [rect_b_x]
-    .key_a_exit:
     
-    cmp byte [keypress], 0x20
-    jne .key_d_exit
-        dec word [rect_b_x]
-    .key_d_exit:
-
 	jmp     .loop_forever_2
 	; does not terminate or return
 
@@ -345,6 +359,9 @@ SECTION .data
 	rect_b_x: dw 0
 	rect_c_x: dw 0
 	rect_d_x: dw 0
+
+    player_x: dw 0
+    player_y: db 0
 
     keypress: db 0
 
