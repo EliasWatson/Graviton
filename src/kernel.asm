@@ -59,6 +59,9 @@ endstruc
 
 SECTION .text
 main:
+    mov ax, cs
+    mov ds, ax
+
 	mov     ah, 0x0
 	mov     al, 0x1
 	int     0x10                    ; set video to text mode
@@ -145,9 +148,13 @@ spawn_new_task:
 	lea     bx, [stack_pointers]                ; switch to the fake stack so we can do stuff with it
 	add     bx, cx
 	mov     sp, [bx]                            ; swap stacks
-	push    di                                  ; push address of function to run
-	pusha                                       ; push registers
-	pushf                                       ; push flags
+    pushf
+    push cs
+    push di
+    pusha
+	;push    di                                  ; push address of function to run
+	;pusha                                       ; push registers
+	;pushf                                       ; push flags
 	lea     bx, [stack_pointers]                ; update top of this stack
 	add     bx, cx
 	mov     [bx], sp
@@ -356,8 +363,8 @@ release:
     ret
 
 SECTION .data
-	rect_a_x: dw 0
-	rect_b_x: dw 0
+	rect_a_x: dw 200
+	rect_b_x: dw 100
 	rect_c_x: dw 0
 	rect_d_x: dw 0
 
