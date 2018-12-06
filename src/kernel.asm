@@ -166,21 +166,21 @@ render_environment:
 ;player thread
 control_player:
 .loop_forever_2:
-    mov ax, 0x0C73
-    mov bx, 0x0
-	mov cx, [rect_b_x]
-    mov dx, 100
-    int 0x10
+    ;mov ax, 0x0C73
+    ;mov bx, 0x0
+	;mov cx, [rect_b_x]
+    ;mov dx, 100
+    ;int 0x10
 
-    cmp byte [keypress], 0x1E
-    jne .key_a_exit
-        inc word [rect_b_x]
-    .key_a_exit:
+    ;cmp byte [keypress], 0x1E
+    ;jne .key_a_exit
+    ;    inc word [rect_b_x]
+    ;.key_a_exit:
     
-    cmp byte [keypress], 0x20
-    jne .key_d_exit
-        dec word [rect_b_x]
-    .key_d_exit:
+    ;cmp byte [keypress], 0x20
+    ;jne .key_d_exit
+    ;    dec word [rect_b_x]
+    ;.key_d_exit:
 
 	jmp     .loop_forever_2
 	; does not terminate or return
@@ -203,13 +203,14 @@ sustain_wells:
 
 ;well graphics thread
 render_wells:
-.loop_forever_4:
 	mov bx, [grav_one]
 	mov ax, word [bx]
 	mov cx, [bx + 2]
 	mov bx, [grav_sprite]
 	mov [bx], ax
 	mov [bx + 2], cx
+.loop_forever_4:
+	mov bx, [grav_sprite]
 	call mutex
 	call displayQuadImage
 	call release
